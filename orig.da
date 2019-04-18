@@ -1,0 +1,172 @@
+import sys
+import math
+
+class P(process):
+    def setup(hCycle:list):
+        self.n = len(hCycle)    # number of precessors
+        self.k = n / (2 ** math.ceil(math.log(math.log(n, 2), 2)))
+        self.state = 'candidate'    # state of p_i: candidate / captured / elected
+        self.level = 0    # number of nodes p_i captured in 1st phase
+        self.phase = 1    # phase number: 1 / 2
+        self.owner = 0    # edge leading to 1st phase winner
+        self.ring = [hCycle[int((i * k) % n)] for i in range(int(n / k))]    # list of processor in R_i
+        
+        self.step = 0
+        self.elected = False
+        self.Received = False
+        self.Response = 0
+        self.done = False
+        self.first_msg = True
+        self.leaderid = None
+
+
+    def candidateAct():
+        while (state == 'candidate' and phase == 1):
+            output(level)
+            if level >= (n / k):
+                send(('OWNER', self), to=ring)# - [self])
+                output("send OWNER to ", ring)
+                Response = 0;
+            else:
+                send_to = int(((level + 1) * k) % n)
+                #if ((send_to % n )!= 0):
+                send(('CAPTURE', 1, level, self), to= hCycle[send_to])
+                output("send CAPTURE to ", hCycle[int(((level + 1) * k) % n)])
+            Received = False
+
+            while (state == 'candidate' and phase == 1 and Received == False):
+                #await (received(()))
+                await (some(received(("CAPTURE", _, _, _))))
+                output("wait finish")
+
+        if (state == 'candidate' and phase == 2):
+            step = 0
+            elected = False
+            while (state == 'candidate' and elected == False):
+                send(('CAPTURE', 2, step, self), to=[hCycle[int(((i * k) / (2 ^ step)) % n)] for i in range(0 , int(2 ** step))])
+                Received = False
+                Response = 0
+                while (state == 'candidate' and elected == False and Received == False):
+                    #await (received(()))
+                    await (some(received(())))
+            send(('ELECTED', self), to=hCycle)# - [self])
+            leaderid = self
+
+    def capturedAct():
+        done = False
+        first_msg = True
+        while done == False:
+            if first_msg == True:
+                state = 'captured'
+                owner = 0
+                phase = 1
+            #await (received(()))
+            await (some(received(())))
+            first_msg = False
+
+    # CAPURE(phase, level/step, id)
+    def receive(msg=('CAPTURE', ph, l, i), from_= node):
+        output("received CAPTURE(" ,ph, l, i, ")", state, phase)
+        if state == 'candidate':
+            if phase == 1:
+                if ph == 1:
+                    if (level < l or (level == l and self < i)):
+                        send(('ACCEPT', 1, level), to=node)
+                        state = 'captured'
+                    elif (level == l and self == i):
+                        send(('ACCEPT', 1, level), to=node)
+                elif ph == 2:
+                    state = 'captured'
+                    phase = 2
+                    send(('ACCEPT', 2, 0), to=node)
+            elif phase == 2:
+                if ph == 2:
+                    if (level > l or (level == l and  self > i)):
+                        send(('ACCEPT', 2, 0), to=node)
+                        state = 'captured'
+                    elif (level == l and self == i):
+                        send(('ACCEPT', 2, 0), to=node)
+        elif state == 'captured':
+            if ph == 1:
+                if phase == 1:
+                    send(('ACCEPT', 1, 0), to=node)
+            elif ph == 2:
+                if (phase == 1 or owner == 0):
+                    send(('ACCEPT', 2, 0), to=node)
+                else:
+                    send(('INFORM', owner), to=node)
+
+    # ACCEPT(phase, level)
+    def receive(msg=('ACCEPT', ph, l), from_= node):
+        output("received ACCEPT (", ph, l, node, ")" , state, phase)
+        if state == 'candidate':
+            if (phase == 1 and ph ==1):
+                level = level + l + 1
+                Received = True
+            elif (phase == 2 and ph == 2):
+                Response = Response + 1
+                if Response == 2 ^ (step - 1):
+                    step = step + 1
+                if step == math.log(k, 2) + 1:
+                    elected = True
+                else:
+                    Received = True
+
+    # ACK(id)
+    def receive(msg=('ACK', i), from_= node):
+        output("received ACK " , state, phase)
+        if (state == 'candidate' and phase == 1 and i == self):
+            Response += 1
+            if (Response == (n / k) - 1):
+                phase = 2
+
+    # ELECTED(id)
+    def receive(msg=('ELECTED', i), from_= node):
+        output("received ELECTED " , state, phase)
+        if state == 'candidate':
+            state = 'captured'
+            leaderid = i
+
+        elif (state == 'captured'):
+            done = True
+            leaderid = i
+
+    # INFORM(x)
+    def receive(msg=('INFORM', x), from_= node):
+        output("received INFORM " , state, phase)
+        if (state == 'candidate' and phase == 2):
+            state = 'captured'
+            e = hCycle.index(node)
+            #if ((e+x) % n != 0):
+            send(('CAPTURE', 2, step, self), to=hCycle[int((e + x) % n)])
+
+    # OWNER(x)
+    def receive(msg=('OWNER', i), from_= node):
+        output("received OWNER " , state, phase)
+        if (state == 'captured' and phase == 1):
+            owner = i
+            phase = 2
+            send(('ACK', i), to=node)
+
+    def run():
+        output("n = ", n)
+        output("k = ", k)
+        if state == 'candidate':
+            output("be candidate")
+            candidateAct()
+        
+        if (state == 'captured' and leaderid == None):
+            output("be captured")
+            capturedAct()
+
+        output("Leader is", leaderid)
+
+
+def main():
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
+    config(channel="fifo")
+    ps = list(new(P, num= n))
+
+    for i, p in enumerate(ps):
+        setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
+    start(ps)
