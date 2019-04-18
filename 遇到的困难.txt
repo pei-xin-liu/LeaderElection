@@ -1,0 +1,10 @@
+已解决：
+1. 算法没说明从自己 receive CAPTURE/OWNER 时应该做什么
+2. 算法没说明知道leader后应该做什么
+3. 算法的缩进不正确：39-50,32-33行应多缩进一格
+4. 算法中45行 owner = i，应改为 owner = cycle.index(i)。即owner实际为owner相对本node的位置
+5. 类变量申明需放到构造函数中
+6. 算法中方法参数前后不统一，如ACCEPT，实现时需统一起来
+7. 判断什么时候接受时应该做什么：把判断state的步骤放进各接收函数中，而不是run中
+8. 找到合适的方法使每次循环只接受一条message：使用receiving_flag实现
+9. 实现Hamiltonian cycle和node间相对距离：传node list给node
