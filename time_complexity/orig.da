@@ -1,6 +1,7 @@
 import sys
 import math
 import random
+import time
 
 class P(process):
     def setup(hCycle:list):
@@ -25,6 +26,8 @@ class P(process):
         self.decided = 0
         self.wake_rate = 0.8
         self.awaken = random.random()
+        
+        self.waitTime = 0.5
 
         # if n is not power of 2
         if (m != n):
@@ -126,6 +129,7 @@ class P(process):
 
     # CAPURE(phase, level/step, id)
     def receive(msg=('CAPTURE', ph, l, node), from_ = sender):
+        stall()
         receiving_flag = True
         #output("received CAPTURE(" ,ph, l, node, ")", state, phase)
         if state == 'candidate':
@@ -167,6 +171,7 @@ class P(process):
 
     # ACCEPT(phase, level)
     def receive(msg=('ACCEPT', ph, l), from_= sender):
+        stall()
         receiving_flag = True
         #output("received ACCEPT (", ph, l, sender, ")" , state, phase)
         if state == 'candidate':
@@ -188,6 +193,7 @@ class P(process):
 
     # ACK(id)
     def receive(msg=('ACK', node), from_= sender):
+        stall()
         receiving_flag = True
         #output("received ACK " , state, phase)
         if (state == 'candidate' and phase == 1 and node == self):
@@ -199,6 +205,7 @@ class P(process):
 
     # ELECTED(id)
     def receive(msg=('ELECTED', node), from_= sender):
+        stall()
         receiving_flag = True
         #output("received ELECTED " , state, phase)
         if state == 'candidate':
@@ -211,6 +218,7 @@ class P(process):
 
     # INFORM(x)
     def receive(msg=('INFORM', x), from_= sender):
+        stall()
         receiving_flag = True
         #output("received INFORM (", x, ")" "from", sender, ")", state, phase)
         if (state == 'candidate' and phase == 2):
@@ -220,6 +228,7 @@ class P(process):
 
     # OWNER(x)
     def receive(msg=('OWNER', node), from_= sender):
+        stall()
         receiving_flag = True
         #output("received OWNER " , state, phase)
         if (state == 'captured' and phase == 1):
@@ -230,13 +239,17 @@ class P(process):
             owner = hCycle.index(node)
             send(('ACK', node), to=sender)
 
+    def stall():
+        if await(False): pass
+        elif timeout(waitTime): pass
+
     def run():
+        #output("time is", time.clock())
         #output("n = ", n)
         #output("m = ", m)
         #output("k = ", k)
 
-        # 20% processors don't wake spontaneously, but wake to receiving messages
-        
+        # wake_rate(20%) processors don't wake spontaneously, but wake to receiving messages
         if (awaken > wake_rate):
         	state == 'captured'
         	#output("didn't awaken")
@@ -249,8 +262,9 @@ class P(process):
             #output("be captured")
             capturedAct()
 
-        output("Leader is", leaderid)
-       
+        #output("Leader is", leaderid)
+        output(time.clock())
+        #output("nMsg = ", nMsg)
         # if (leaderid != None):
         # 	DECIDENUM = DECIDENUM + 1
         # 	output(DECIDENUM)
@@ -258,14 +272,17 @@ class P(process):
 
 
 def main():
-	n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
-	config(channel="fifo")
-	ps = list(new(P, num= n))
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
+    config(channel="fifo")
+    ps = list(new(P, num= n))
 	#output(ps)
-	for i, p in enumerate(ps):
-		setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
-	#output('start finish')
-	start(ps)
+    for i, p in enumerate(ps):
+        setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
+    output(time.clock())
+    start(ps)
+    # if await(False): pass
+    # elif timeout(1): pass
+
 	# await(DECIDENUM == n)
 	# output("decided_num = ", DECIDENUM)
     # num_decided = 0
