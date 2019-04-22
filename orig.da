@@ -1,40 +1,54 @@
 import sys
 import math
+import random
 
 class P(process):
     def setup(hCycle:list):
         self.n = len(hCycle)    # number of precessors
-        self.k = n / (2 ** math.ceil(math.log(math.log(n, 2), 2)))
-        self.state = 'candidate'    # state of p_i: candidate / captured / elected
+        self.m = int(2 ** math.floor(math.log(n, 2)))    # if n is not power of 2
+        self.k = m / (2 ** math.ceil(math.log(math.log(m, 2), 2)))
+        self.state = 'candidate'    # state of p_i: candidate / captured / leader
         self.level = 0    # number of nodes p_i captured in 1st phase
         self.phase = 1    # phase number: 1 / 2
         self.owner = 0    # edge leading to 1st phase winner
-        self.ring = [hCycle[int((i * k) % n)] for i in range(int(n / k))]    # list of processor in R_i
+        self.ring = [hCycle[int((i * k) % n)] for i in range(int(math.ceil(n / k)))]    # list of processor in R_i
+        self.ringPh2 = []
         
         self.step = 0
-        self.elected = False
+        #self.elected = False
         self.Received = False
         self.Response = 0
         self.done = False
         self.first_msg = True
         self.leaderid = None
         self.receiving_flag = False
+        self.decided = 0
+
+        # if n is not power of 2
+        if (m != n):
+            for i in range(1, int(math.ceil(n / k))):
+                index = - int((i * k) % n)
+                if hCycle[index] not in ring:
+                    ring.append(hCycle[index])
 
 
     def candidateAct():
         while (state == 'candidate' and phase == 1):
             #output("level = ", level)
-            if level >= (n / k):
+            if level >= len(ring):
                 send(('OWNER', self), to=ring)# - [self])
                 #output("send OWNER to ", ring)
+                #output("ring lenth =  ", len(ring))
                 Response = 0;
             else:
-                send_to = int(((level + 1) * k) % n)
+                # send_to = int(((level + 1) * k) % n)
                 #if ((send_to % n )!= 0):
-                send(('CAPTURE', 1, level, self), to= hCycle[send_to])
-                #output("send CAPTURE to ", hCycle[int(((level + 1) * k) % n)])
-            Received = False
+                # send(('CAPTURE', 1, level, self), to= hCycle[send_to])
+                # output("send CAPTURE to ", hCycle[int(((level + 1) * k) % n)])
+                send(('CAPTURE', 1, level, self), to= ring[int((level + 1) % len(ring))])
+                #output("send CAPTURE to ", ring[level])
 
+            Received = False
             while (state == 'candidate' and phase == 1 and Received == False):
                 #await (received(()))
                 #await (some(received(("CAPTURE", _, _, _))))
@@ -44,19 +58,52 @@ class P(process):
 
         if (state == 'candidate' and phase == 2):
             step = 1
-            elected = False
-            while (state == 'candidate' and elected == False):
-                send(('CAPTURE', 2, step, self), to=[hCycle[int(((i * k) / (2 ** step)) % n)] for i in range(1 , int((2 ** (step-1))+1))])
+            #elected = False
+            # if (len(ring) == n):
+            #     state = 'leader'
+            #     output('leader because phase 1')
+            while (state == 'candidate'):
+                ringPh2 = []
+                for i in range(1 , int((2 ** (step-1))+1)):
+                    index = int(((i * k) / (2 ** step)) % n)
+                    if hCycle[index] not in ring:
+                        ringPh2.append(hCycle[index])
+                
+                # if n is not power of 2
+                if (n != m):
+                    for i in range(1, int((2 ** (step-1))+1)):
+                        index = - int(((i * k) / (2 ** step)) % n)
+                        if hCycle[index] not in (ring + ringPh2):
+                            ringPh2.append(hCycle[index])
+                
+                # maybe already captured al nodes in phase 1
+                # if (len(ringPh2) == 0):
+                # 	output('leader because phase 1')
+                # 	state = 'leader'
+                # 	break
+            	# ringPh2 = [hCycle[int(((i * k) / (2 ** step)) % n)] for i in range(1 , int((2 ** (step-1))+1)) if hCycle[int(((i * k) / (2 ** step)) % n)] not in ring]
+            	# ringPh2 = ringPh2 + [hCycle[- int(((i * k) / (2 ** step)) % n)] for i in range(1, )]
+                send(('CAPTURE', 2, step, self), to=ringPh2)
+                # send(('CAPTURE', 2, step, self), to=[hCycle[int(((i * k) / (2 ** step)) % n)] for i in range(1 , int((2 ** (step-1))+1))])
                 #output("step = ", step)
+                #output("send CAPTURE to", ringPh2)
                 #output("send CAPTURE to", [hCycle[int(((i * k) / (2 ** step)) % n)] for i in range(1 , int((2 ** (step-1))+1))])
                 Received = False
                 Response = 0
-                while (state == 'candidate' and elected == False and Received == False):
+                # while (state == 'candidate' and elected == False and Received == False):
+                while (state == 'candidate' and Received == False):
+                    if (len(ringPh2) == 0):
+                        step = step + 1
+                        if step >= math.log(k, 2) + 1:
+                        	#elected = True
+                        	self.state = 'leader'
+                        	#output("elected")
+                        break
                     #await (received(()))
                     #await (some(received(())))
                     await(receiving_flag)
                     receiving_flag = False
-            if state == 'candidate':
+            if state == 'leader':
                 send(('ELECTED', self), to=hCycle)# - [self])
                 #output('ELECTED', state)
                 leaderid = self
@@ -86,7 +133,7 @@ class P(process):
                         send(('ACCEPT', 1, level), to=sender)
                         #output("send ACCEPT (", 1, level, sender, ")")
                         state = 'captured'
-                    elif (level == l and self == node):
+                    elif (self == node):
                         send(('ACCEPT', 1, level), to=sender)
                         #output("send ACCEPT (", 1, level, sender, ")")
                 elif ph == 2:
@@ -127,11 +174,12 @@ class P(process):
             elif (phase == 2 and ph == 2):
                 Response = Response + 1
                 #output("Response = ", Response)
-                if Response == 2 ** (step - 1):
+                if Response >= len(ringPh2):
                     step = step + 1
                     #output("step = ", step)
-                    if step == math.log(k, 2) + 1:
-                        elected = True
+                    if step >= math.log(k, 2) + 1:
+                        #elected = True
+                        self.state = 'leader'
                         #output("elected")
                     else:
                         Received = True
@@ -142,8 +190,10 @@ class P(process):
         #output("received ACK " , state, phase)
         if (state == 'candidate' and phase == 1 and node == self):
             Response = Response + 1
-            if (Response == (n / k) - 1):
+            #output("Response = ", Response)
+            if (Response >= len(ring) - 1):
                 phase = 2
+                #output("go to phase 2")
 
     # ELECTED(id)
     def receive(msg=('ELECTED', node), from_= sender):
@@ -180,7 +230,16 @@ class P(process):
 
     def run():
         #output("n = ", n)
+        #output("m = ", m)
         #output("k = ", k)
+
+        # 20% processors don't wake spontaneously, but wake to receiving messages
+        wake_rate = 0.8
+        awaken = random.random()
+        if (awaken > wake_rate):
+        	state == 'captured'
+        	#output("didn't awaken")
+
         if state == 'candidate':
             #output("be candidate")
             candidateAct()
@@ -190,13 +249,25 @@ class P(process):
             capturedAct()
 
         output("Leader is", leaderid)
+       
+        # if (leaderid != None):
+        # 	DECIDENUM = DECIDENUM + 1
+        # 	output(DECIDENUM)
+        	
 
 
 def main():
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
-    config(channel="fifo")
-    ps = list(new(P, num= n))
-    output(ps)
-    for i, p in enumerate(ps):
-        setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
-    start(ps)
+	n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
+	config(channel="fifo")
+	ps = list(new(P, num= n))
+	#output(ps)
+	for i, p in enumerate(ps):
+		setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
+	output('start finish')
+	start(ps)
+	# await(DECIDENUM == n)
+	# output("decided_num = ", DECIDENUM)
+    # num_decided = 0
+    # for p in ps:
+    # 	num_decided += p.is_decided()
+    # output(num_decided)
