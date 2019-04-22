@@ -12,3 +12,4 @@ for /l %%i in (%step%, %step%, %maxProc%) do (
 		echo proc =  %%i, repeat =  %%j
 		)
 	)
+shutdown -s -f -t 60

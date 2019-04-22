@@ -26,8 +26,9 @@ class P(process):
         self.decided = 0
         self.wake_rate = 0.8
         self.awaken = random.random()
+        self.waitState = 0    # state and phase when waiting for messages
         
-        self.waitTime = 0.5
+        self.waitTime = 0
 
         # if n is not power of 2
         if (m != n):
@@ -57,6 +58,7 @@ class P(process):
             while (state == 'candidate' and phase == 1 and Received == False):
                 #await (received(()))
                 #await (some(received(("CAPTURE", _, _, _))))
+                waitState = 1
                 await(receiving_flag)
                 receiving_flag = False
                 #output("wait finish", phase)
@@ -106,6 +108,7 @@ class P(process):
                         break
                     #await (received(()))
                     #await (some(received(())))
+                    waitState = 2
                     await(receiving_flag)
                     receiving_flag = False
             if state == 'leader':
@@ -123,6 +126,7 @@ class P(process):
                 phase = 1
             #await (received(()))
             #await (some(received(())))
+            waitState = 3
             await(receiving_flag)
             receiving_flag = False
             first_msg = False
@@ -132,31 +136,30 @@ class P(process):
         stall()
         receiving_flag = True
         #output("received CAPTURE(" ,ph, l, node, ")", state, phase)
-        if state == 'candidate':
-            if phase == 1:
-                if ph == 1:
-                    if (level < l or (level == l and self < node)):
-                        send(('ACCEPT', 1, level), to=sender)
-                        #output("send ACCEPT (", 1, level, sender, ")")
-                        state = 'captured'
-                    elif (self == node):
-                        send(('ACCEPT', 1, level), to=sender)
-                        #output("send ACCEPT (", 1, level, sender, ")")
-                elif ph == 2:
+        if waitState == 1:
+            if ph == 1:
+                if (level < l or (level == l and self < node)):
+                    send(('ACCEPT', 1, level), to=sender)
+                    #output("send ACCEPT (", 1, level, sender, ")")
                     state = 'captured'
-                    phase = 2
+                elif (self == node):
+                    send(('ACCEPT', 1, level), to=sender)
+                    #output("send ACCEPT (", 1, level, sender, ")")
+            elif ph == 2:
+                state = 'captured'
+                phase = 2
+                send(('ACCEPT', 2, 0), to=sender)
+                #output("send ACCEPT to (", sender, ")", 2, 0)
+        elif waitState == 2:
+            if ph == 2:
+                if (l > step or (l == step and  node > self)):
                     send(('ACCEPT', 2, 0), to=sender)
-                    #output("send ACCEPT to (", sender, ")", 2, 0)
-            elif phase == 2:
-                if ph == 2:
-                    if (l > step or (l == step and  node > self)):
-                        send(('ACCEPT', 2, 0), to=sender)
-                        #output("send ACCEPT (", 2, 0, sender, ")")
-                        state = 'captured'
-                    elif (l == step and self == node):
-                        send(('ACCEPT', 2, 0), to=sender)
-                        #output("send ACCEPT (", 2, 0, sender, ")")
-        elif state == 'captured':
+                    #output("send ACCEPT (", 2, 0, sender, ")")
+                    state = 'captured'
+                elif (self == node):
+                    send(('ACCEPT', 2, 0), to=sender)
+                    #output("send ACCEPT (", 2, 0, sender, ")")
+        elif waitState == 3:
             if ph == 1:
                 if phase == 1:
                     send(('ACCEPT', 1, 0), to=sender)
@@ -174,29 +177,28 @@ class P(process):
         stall()
         receiving_flag = True
         #output("received ACCEPT (", ph, l, sender, ")" , state, phase)
-        if state == 'candidate':
-            if (phase == 1 and ph ==1):
-                level = level + l + 1
-                Received = True
-            elif (phase == 2 and ph == 2):
-                Response = Response + 1
-                #output("Response = ", Response)
-                if Response >= len(ringPh2):
-                    step = step + 1
-                    #output("step = ", step)
-                    if step >= math.log(k, 2) + 1:
-                        #elected = True
-                        self.state = 'leader'
-                        #output("elected")
-                    else:
-                        Received = True
+        if (waitState == 1 and ph == 1):
+            level = level + l + 1
+            Received = True
+        elif (waitState == 2 and ph == 2):
+            Response = Response + 1
+            #output("Response = ", Response)
+            if Response >= len(ringPh2):
+                step = step + 1
+                #output("step = ", step)
+                if step >= math.log(k, 2) + 1:
+                    #elected = True
+                    self.state = 'leader'
+                    #output("elected")
+                else:
+                    Received = True
 
     # ACK(id)
     def receive(msg=('ACK', node), from_= sender):
         stall()
         receiving_flag = True
         #output("received ACK " , state, phase)
-        if (state == 'candidate' and phase == 1 and node == self):
+        if (waitState == 1):
             Response = Response + 1
             #output("Response = ", Response)
             if (Response >= len(ring) - 1):
@@ -221,7 +223,7 @@ class P(process):
         stall()
         receiving_flag = True
         #output("received INFORM (", x, ")" "from", sender, ")", state, phase)
-        if (state == 'candidate' and phase == 2):
+        if waitState == 2:
             e = hCycle.index(sender)
             send(('CAPTURE', 2, step, self), to=hCycle[int((e + x) % n)])
             #output("send CAPTURE to(", hCycle[int((e + x) % n)], ")", 2, step)
@@ -231,11 +233,11 @@ class P(process):
         stall()
         receiving_flag = True
         #output("received OWNER " , state, phase)
-        if (state == 'captured' and phase == 1):
+        if (waitState == 3):
             owner = hCycle.index(node)
             phase = 2
             send(('ACK', node), to=sender)
-        elif (state == 'candidate' and phase == 1 and self == node):
+        elif (waitState == 1 and self == node):
             owner = hCycle.index(node)
             send(('ACK', node), to=sender)
 
@@ -244,10 +246,10 @@ class P(process):
         elif timeout(waitTime): pass
 
     def run():
-        #output("time is", time.clock())
         #output("n = ", n)
         #output("m = ", m)
         #output("k = ", k)
+        #output(time.clock())
 
         # wake_rate(20%) processors don't wake spontaneously, but wake to receiving messages
         if (awaken > wake_rate):
