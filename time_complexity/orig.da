@@ -1,3 +1,4 @@
+import time
 import sys
 import math
 import random
@@ -13,6 +14,7 @@ class P(process):
         self.phase = 1    # phase number: 1 / 2
         self.owner = 0    # edge leading to 1st phase winner
         self.ring = [hCycle[int((i * k) % n)] for i in range(int(math.ceil(n / k)))]    # list of processor in R_i
+        self.OriRingLen = len(ring)
         self.ringPh2 = []
         
         self.step = 0
@@ -31,7 +33,7 @@ class P(process):
 
         # if n is not power of 2
         if (m != n):
-            for i in range(-int(math.ceil(n / k),), -1, 1):
+            for i in range(-int(math.ceil(n / k)) + 1, 0, 1):
                 index = int((i * k) % n)
                 if hCycle[index] not in ring:
                     ring.append(hCycle[index])
@@ -43,11 +45,11 @@ class P(process):
             if level >= len(ring):
                 send(('OWNER', self), to=ring)# - [self])
                 # output("send OWNER to ", ring)
-                #output("ring lenth =  ", len(ring))
+                # output("ring lenth =  ", len(ring))
                 Response = 0;
             else:
                 send(('CAPTURE', 1, level, self), to= ring[int((level + 1) % len(ring))])
-                # output("send CAPTURE to ", ring[level])
+                # output("send CAPTURE to ", ring[int((level + 1) % len(ring))])
 
             Received = False
             while (state == 'candidate' and phase == 1 and Received == False):
@@ -67,7 +69,7 @@ class P(process):
                 
                 # if n is not power of 2
                 if (n != m):
-                    for i in range(- int((2 ** (step-1))+1), -1, 1):
+                    for i in range(- int((2 ** (step-1))+1) + 1, 0, 1):
                         index = int(((i * k) / (2 ** step)) % n)
                         if hCycle[index] not in (ring + ringPh2):
                             ringPh2.append(hCycle[index])
@@ -118,7 +120,7 @@ class P(process):
                         # output("send ACCEPT (", 1, level, sender, ")")
                         state = 'captured'
                     elif (self == node):
-                        send(('ACCEPT', 1, level), to=sender)
+                        send(('ACCEPT', 1, 0), to=sender)
                         # output("send ACCEPT (", 1, 0, sender, ")")
                 elif ph == 2:
                     state = 'captured'
@@ -151,10 +153,14 @@ class P(process):
     def receive(msg=('ACCEPT', ph, l), from_= sender):
         stall()
         receiving_flag = True
-        # output("received ACCEPT (", ph, l, sender, ")" , state, phase)
+        # output("received ACCEPT from (", ph, l, sender, ")" , state, phase)
         if state == 'candidate':
             if (phase == 1 and ph ==1):
-                level = level + l + 1
+                addUp = level + l + 1
+                if (level <= (OriRingLen - 2) and addUp > (OriRingLen - 2) ):    # split ring and ringBelong
+                    level = OriRingLen - 1
+                else:
+                    level = addUp
                 Received = True
             elif (phase == 2 and ph == 2):
                 Response = Response + 1
@@ -218,7 +224,6 @@ class P(process):
             owner = hCycle.index(node)
             send(('ACK', node), to=sender)
 
-    # add delay to message passing
     def stall():
         if await(False): pass
         elif timeout(waitTime): pass
@@ -244,8 +249,6 @@ class P(process):
 
         #output("Leader is", leaderid)
         output(time.clock())
-            
-
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 16
@@ -254,7 +257,9 @@ def main():
     # output(ps)
     for i, p in enumerate(ps):
         setup({p}, ([ps[int((i+j) % n)] for j in range(n)],))
-    #output('start finish')
+    # output('start finish')
     output(time.clock())
     start(ps)
+
+
 
