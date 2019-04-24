@@ -11,3 +11,4 @@
 10. n = 2时不行，把response和step的判断条件从 == 改为 >=
 11. n为任意时，ring需加上额外的node，phase2发消息需忽略所有ring中的node。但此时ringPh2可能为空，应直接step++; continue;
 12. 使用 -I thread后，n上限可以达到很高（n>5000初始化时间太长，没试）
+13. n != 2的次方时，加上ringBelong后，要分清ring中的node传进来的level不能影响ringBelong中的node
