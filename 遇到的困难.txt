@@ -1,14 +1,19 @@
 已解决：
+
+
+
+6. 算法中方法参数前后不统一，如ACCEPT，实现时需统一起来
+
+10. n = 2时不行，把response和step的判断条件从 == 改为 >=
+11. n为任意时，ring需加上额外的node，phase2发消息需忽略所有ring中的node。但此时ringPh2可能为空，应直接step++; continue;
+12. 使用 -I thread后，n上限可以达到很高（n>5000初始化时间太长，没试）
+13. n != 2的次方时，加上ringBelong后，要分清ring中的node传进来的level不能影响ringBelong中的node
+
 1. 算法没说明从自己 receive CAPTURE/OWNER 时应该做什么
 2. 算法没说明知道leader后应该做什么
 3. 算法的缩进不正确：39-50行应少缩进两格，32行应多缩进一格
 4. 算法中45行 owner = i，应改为 owner = cycle.index(i)。即owner实际为owner相对本node的位置
 5. 类变量申明需放到构造函数中
-6. 算法中方法参数前后不统一，如ACCEPT，实现时需统一起来
 7. 判断什么时候接受时应该做什么：把判断state的步骤放进各接收函数中，而不是run中
 8. 找到合适的方法使每次循环只接受一条message：使用receiving_flag实现
 9. 实现Hamiltonian cycle和node间相对距离：传node list给node
-10. n = 2时不行，把response和step的判断条件从 == 改为 >=
-11. n为任意时，ring需加上额外的node，phase2发消息需忽略所有ring中的node。但此时ringPh2可能为空，应直接step++; continue;
-12. 使用 -I thread后，n上限可以达到很高（n>5000初始化时间太长，没试）
-13. n != 2的次方时，加上ringBelong后，要分清ring中的node传进来的level不能影响ringBelong中的node

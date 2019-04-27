@@ -77,6 +77,7 @@ class P(process):
                 Received = False
                 Response = 0
                 while (state == 'candidate' and Received == False):
+                    # if no receiver remains after omitting phase 1 nodes
                     if (len(ringPh2) == 0):
                         step = step + 1
                         if step >= math.log(k, 2) + 1:
